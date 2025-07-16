@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 
 def seed():
     db: Session = SessionLocal()
-    # Thêm các chủ đề
     topics = [
         Topic(name="Tình yêu"),
         Topic(name="Công sở"),
@@ -18,7 +17,6 @@ def seed():
         if not db.query(Topic).filter_by(name=topic.name).first():
             db.add(topic)
     db.commit()
-    # Thêm các tình huống mẫu
     love = db.query(Topic).filter_by(name="Tình yêu").first()
     work = db.query(Topic).filter_by(name="Công sở").first()
     family = db.query(Topic).filter_by(name="Gia đình").first()

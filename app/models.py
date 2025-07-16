@@ -1,6 +1,20 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, JSON, DateTime, func, Boolean
 from sqlalchemy.orm import relationship
 from app.database import Base
+from typing import Optional
+from datetime import datetime
+
+class User(Base):
+    __tablename__ = "users"
+    id: Optional[int] =  Column(Integer, primary_key=True, index=True)
+    google_id: Optional[str] = Column(String, unique=True, index=True)
+    email = Column(String, unique=True, index=True)
+    name : Optional[str] = Column(String)
+    picture : Optional[str] = Column(String)
+    encrypted_refresh_token: Optional[str] = Column(String)
+    is_active: bool = True
+    created_at: Optional[datetime] = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Optional[datetime] = Column(DateTime(timezone=True), server_default=func.now())
 
 class Topic(Base):
     __tablename__ = "topics"

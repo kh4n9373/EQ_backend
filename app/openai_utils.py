@@ -48,7 +48,7 @@ Hãy trả về kết quả dưới dạng JSON với cấu trúc sau:
     """
 
     response = openai.chat.completions.create(
-        model="gemini-2.0-flash",
+        model="gemini-1.5-flash",
         messages=[
             {"role": "system", "content": "Bạn là một chuyên gia EQ và đánh giá hành vi con người dựa trên phản ứng cảm xúc."},
             {"role": "user", "content": prompt}
@@ -57,7 +57,6 @@ Hãy trả về kết quả dưới dạng JSON với cấu trúc sau:
     )
 
     reply = response.choices[0].message.content
-    # Trích JSON từ nội dung trả về
     try:
         json_str = re.search(r"\{.*\}", reply, re.DOTALL).group()
         result = json.loads(json_str)

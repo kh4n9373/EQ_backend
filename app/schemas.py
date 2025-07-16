@@ -28,6 +28,7 @@ class SituationOut(SituationBase):
         orm_mode = True
 
 class SituationContribute(BaseModel):
+    topic_id: int
     context: str
     question: str
     created_at: Optional[datetime] = None
@@ -35,6 +36,7 @@ class SituationContribute(BaseModel):
 class SituationContributeOut(BaseModel):
     id: int
     context: str
+    topic_id: int
     question: str
     created_at: Optional[datetime] = None
     class Config:

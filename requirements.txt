@@ -5,3 +5,6 @@ psycopg2-binary
 pydantic
 openai
 python-dotenv
+authlib
+python-jose
+itsdangerous

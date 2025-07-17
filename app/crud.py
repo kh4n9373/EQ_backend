@@ -46,10 +46,13 @@ def create_result(db: Session, result: schemas.ResultCreate):
     db.refresh(db_result)
     return db_result
 
-def contribute_situation(db: Session, situation: schemas.SituationContribute):
+def contribute_situation(db: Session, situation: schemas.SituationContribute, user_id: int):
     db_situation = models.Situation(
+        topic_id=situation.topic_id,
+        user_id=user_id,
         context=situation.context,
         question=situation.question,
+        image_url=situation.image_url,
         is_contributed=True
     )
     db.add(db_situation)

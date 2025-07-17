@@ -29,6 +29,8 @@ class SituationOut(SituationBase):
 
 class SituationContribute(BaseModel):
     topic_id: int
+    # user_id: int
+    image_url: Optional[str] = None
     context: str
     question: str
     created_at: Optional[datetime] = None
@@ -36,6 +38,8 @@ class SituationContribute(BaseModel):
 class SituationContributeOut(BaseModel):
     id: int
     context: str
+    user_id: int
+    image_url: Optional[str] = None
     topic_id: int
     question: str
     created_at: Optional[datetime] = None
@@ -70,3 +74,17 @@ class ResultOut(ResultBase):
     created_at: datetime
     class Config:
         orm_mode = True
+
+class UserShortOut(BaseModel):
+    id: int
+    name: str
+    picture: Optional[str] = None
+
+class SituationFeedOut(BaseModel):
+    id: int
+    topic_id: int
+    user: UserShortOut
+    image_url: Optional[str] = None
+    context: str
+    question: str
+    created_at: datetime

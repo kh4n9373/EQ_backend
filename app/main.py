@@ -156,28 +156,44 @@ def create_result(result: schemas.ResultCreate, db: Session = Depends(get_db)):
     return db_result
 
 @app.post("/contribute-situation", response_model=schemas.SituationContributeOut)
-def contribute_situation(situation: schemas.SituationContribute, db: Session = Depends(get_db)):
-    db_situation = crud.contribute_situation(db, situation)
+def contribute_situation(
+    situation: schemas.SituationContribute, 
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    db_situation = crud.contribute_situation(db, situation, current_user["id"])
     return schemas.SituationContributeOut(
         id=db_situation.id,
         topic_id=db_situation.topic_id,
+        user_id=current_user["id"],
+        image_url=db_situation.image_url,
         context=db_situation.context,
         question=db_situation.question,
         created_at=db_situation.created_at.strftime("%Y-%m-%d %H:%M:%S")
     )
 
-@app.get("/contributed-situations", response_model=list[schemas.SituationContributeOut])
+@app.get("/contributed-situations", response_model=list[schemas.SituationFeedOut])
 def get_contributed_situations(db: Session = Depends(get_db)):
-    situations = crud.get_contributed_situations(db)
-    return [
-        schemas.SituationContributeOut(
+    situations = db.query(models.Situation).filter(models.Situation.topic_id != None).all()
+    result = []
+    for s in situations:
+        user = db.query(models.User).filter(models.User.id == s.user_id).first()
+        if not user:
+            continue
+        result.append(schemas.SituationFeedOut(
             id=s.id,
             topic_id=s.topic_id,
+            user=schemas.UserShortOut(
+                id=user.id,
+                name=user.name,
+                picture=user.picture
+            ) if user else None,
+            image_url=s.image_url,
             context=s.context,
             question=s.question,
             created_at=s.created_at.strftime("%Y-%m-%d %H:%M:%S")
-        ) for s in situations
-    ]
+        ))
+    return result
 
 @app.get("/answers-by-situation", response_model=list[schemas.AnswerOut])
 def get_answers_by_situation(situation_id: int, db: Session = Depends(get_db)):

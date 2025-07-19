@@ -19,7 +19,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,6 +43,36 @@ def read_root():
 @app.get("/users/me")
 async def read_current_user(current_user: dict = Depends(get_current_user)):
     return current_user
+
+@app.get("/users/search")
+def search_users(query: str, db: Session = Depends(get_db)):
+
+    if not query or len(query) < 2:
+        return []
+    
+    users = db.query(models.User).filter(
+        models.User.name.ilike(f"%{query}%")
+    ).limit(10).all()
+    
+    return [schemas.UserShortOut(
+        id=user.id,
+        name=user.name,
+        picture=user.picture
+    ) for user in users]
+
+@app.get("/users/{user_id}")
+def get_user_profile(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return schemas.UserProfileOut(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+        picture=user.picture,
+        bio=user.bio
+    )
 
 @app.get("/login/google")
 async def login_google(request: Request):
@@ -213,3 +243,228 @@ def get_answers_by_situation(situation_id: int, db: Session = Depends(get_db)):
             created_at=a.created_at
         ))
     return result
+
+@app.get("/situations/{situation_id}/comments")
+def get_comments_by_situation(situation_id: int, db: Session = Depends(get_db)):
+    comments = crud.get_comments_by_situation(db, situation_id)
+    return [schemas.CommentOut(
+        id=c.id,
+        situation_id=c.situation_id,
+        user=schemas.UserShortOut(
+            id=c.user.id,
+            name=c.user.name,
+            picture=c.user.picture
+        ) if c.user else None,
+        content=c.content,
+        sentiment_analysis=c.sentiment_analysis,
+        created_at=c.created_at
+    ) for c in comments]
+
+@app.post("/situations/{situation_id}/comments")
+def create_comment(comment: schemas.CommentCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    # Phân tích sentiment trước khi lưu comment
+    try:
+        sentiment_result = analyze_sentiment_content(comment.content)
+        db_comment = crud.create_comment(db, comment, current_user["id"], sentiment_result)
+    except Exception as e:
+        # Nếu phân tích sentiment thất bại, vẫn lưu comment
+        db_comment = crud.create_comment(db, comment, current_user["id"])
+    
+    return db_comment
+
+def analyze_sentiment_content(content: str):
+    """Hàm helper để phân tích sentiment"""
+    # Từ khóa tiêu cực và stress
+    negative_keywords = [
+        'chán', 'mệt', 'stress', 'khó chịu', 'bực', 'tức', 'giận', 'buồn', 'thất vọng',
+        'không thích', 'ghét', 'khó khăn', 'vấn đề', 'lo lắng', 'sợ', 'hoảng',
+        'tuyệt vọng', 'đau khổ', 'khổ sở', 'mệt mỏi', 'kiệt sức', 'bế tắc'
+    ]
+    
+    # Từ khóa tích cực
+    positive_keywords = [
+        'vui', 'hạnh phúc', 'tốt', 'tuyệt', 'thích', 'yêu', 'thú vị', 'thành công',
+        'may mắn', 'tích cực', 'lạc quan', 'hy vọng', 'niềm vui', 'hài lòng'
+    ]
+    
+    text_lower = content.lower()
+    
+    # Đếm từ khóa
+    negative_count = sum(1 for word in negative_keywords if word in text_lower)
+    positive_count = sum(1 for word in positive_keywords if word in text_lower)
+    
+    # Tính sentiment score (-1 đến 1)
+    total_words = len(text_lower.split())
+    if total_words == 0:
+        sentiment_score = 0
+    else:
+        sentiment_score = (positive_count - negative_count) / max(total_words, 1)
+        sentiment_score = max(-1, min(1, sentiment_score))  # Giới hạn trong [-1, 1]
+    
+    # Xác định sentiment
+    if sentiment_score > 0.1:
+        sentiment = "positive"
+        severity = "low"
+    elif sentiment_score < -0.1:
+        sentiment = "negative"
+        severity = "high" if negative_count > 3 else "medium"
+    else:
+        sentiment = "neutral"
+        severity = "low"
+    
+    # Tạo cảnh báo và gợi ý
+    warning = None
+    suggestions = []
+    
+    if sentiment == "negative":
+        if severity == "high":
+            warning = "⚠️ Phát hiện dấu hiệu stress/tiêu cực cao. Hãy cân nhắc tìm sự hỗ trợ."
+            suggestions = [
+                "Hít thở sâu và thư giãn một chút",
+                "Chia sẻ với bạn bè hoặc người thân",
+                "Tập trung vào những điều tích cực",
+                "Tìm hoạt động giải trí để thư giãn"
+            ]
+        else:
+            warning = "💡 Có vẻ bạn đang hơi tiêu cực. Mọi thứ sẽ ổn thôi!"
+            suggestions = [
+                "Thử nhìn vấn đề từ góc độ khác",
+                "Tập trung vào giải pháp thay vì vấn đề",
+                "Chia sẻ để được lắng nghe và hỗ trợ"
+            ]
+    elif sentiment == "positive":
+        suggestions = [
+            "Tuyệt vời! Hãy lan tỏa năng lượng tích cực này",
+            "Chia sẻ niềm vui với mọi người xung quanh",
+            "Ghi nhớ cảm giác này để vượt qua khó khăn sau này"
+        ]
+    else:
+        suggestions = [
+            "Hãy chia sẻ thêm về cảm xúc của bạn",
+            "Thử bày tỏ rõ ràng hơn về suy nghĩ của mình"
+        ]
+    
+    return {
+        "sentiment": sentiment,
+        "score": sentiment_score,
+        "severity": severity,
+        "warning": warning,
+        "suggestions": suggestions,
+        "analysis": {
+            "positive_words": positive_count,
+            "negative_words": negative_count,
+            "total_words": total_words
+        }
+    }
+
+@app.post("/analyze-sentiment")
+def analyze_sentiment(text: schemas.SentimentAnalysisRequest, db: Session = Depends(get_db)):
+    """Phân tích sentiment của text và đưa ra cảnh báo nếu cần"""
+    try:
+
+        negative_keywords = [
+            'chán', 'mệt', 'stress', 'khó chịu', 'bực', 'tức', 'giận', 'buồn', 'thất vọng',
+            'không thích', 'ghét', 'khó khăn', 'vấn đề', 'lo lắng', 'sợ', 'hoảng',
+            'tuyệt vọng', 'đau khổ', 'khổ sở', 'mệt mỏi', 'kiệt sức', 'bế tắc','vl'
+        ]
+        
+
+        positive_keywords = [
+            'vui', 'hạnh phúc', 'tốt', 'tuyệt', 'thích', 'yêu', 'thú vị', 'thành công',
+            'may mắn', 'tích cực', 'lạc quan', 'hy vọng', 'niềm vui', 'hài lòng'
+        ]
+        
+        text_lower = text.content.lower()
+        
+        negative_count = sum(1 for word in negative_keywords if word in text_lower)
+        positive_count = sum(1 for word in positive_keywords if word in text_lower)
+        
+        total_words = len(text_lower.split())
+        if total_words == 0:
+            sentiment_score = 0
+        else:
+            sentiment_score = (positive_count - negative_count) / max(total_words, 1)
+            sentiment_score = max(-1, min(1, sentiment_score)) 
+
+        if sentiment_score > 0.1:
+            sentiment = "positive"
+            severity = "low"
+        elif sentiment_score < -0.1:
+            sentiment = "negative"
+            severity = "high" if negative_count > 3 else "medium"
+        else:
+            sentiment = "neutral"
+            severity = "low"
+        
+        warning = None
+        suggestions = []
+        
+        if sentiment == "negative":
+            if severity == "high":
+                warning = "⚠️ Phát hiện dấu hiệu stress/tiêu cực cao. Hãy cân nhắc tìm sự hỗ trợ."
+                suggestions = [
+                    "Hít thở sâu và thư giãn một chút",
+                    "Chia sẻ với bạn bè hoặc người thân",
+                    "Tập trung vào những điều tích cực",
+                    "Tìm hoạt động giải trí để thư giãn"
+                ]
+            else:
+                warning = "💡 Có vẻ bạn đang hơi tiêu cực. Mọi thứ sẽ ổn thôi!"
+                suggestions = [
+                    "Thử nhìn vấn đề từ góc độ khác",
+                    "Tập trung vào giải pháp thay vì vấn đề",
+                    "Chia sẻ để được lắng nghe và hỗ trợ"
+                ]
+        elif sentiment == "positive":
+            suggestions = [
+                "Tuyệt vời! Hãy lan tỏa năng lượng tích cực này",
+                "Chia sẻ niềm vui với mọi người xung quanh",
+                "Ghi nhớ cảm giác này để vượt qua khó khăn sau này"
+            ]
+        else:
+            suggestions = [
+                "Hãy chia sẻ thêm về cảm xúc của bạn",
+                "Thử bày tỏ rõ ràng hơn về suy nghĩ của mình"
+            ]
+        
+        return {
+            "sentiment": sentiment,
+            "score": sentiment_score,
+            "severity": severity,
+            "warning": warning,
+            "suggestions": suggestions,
+            "analysis": {
+                "positive_words": positive_count,
+                "negative_words": negative_count,
+                "total_words": total_words
+            }
+        }
+        
+    except Exception as e:
+        return {"error": f"Không thể phân tích sentiment: {str(e)}"}
+
+@app.get("/situations/{situation_id}/reactions")
+def get_reactions_by_situation(situation_id: int, db: Session = Depends(get_db)):
+    reactions = crud.get_reactions_by_situation(db, situation_id)
+    return [schemas.ReactionOut(
+        id=r.id,
+        situation_id=r.situation_id,
+        user=schemas.UserShortOut(
+            id=r.user.id,
+            name=r.user.name,
+            picture=r.user.picture
+        ) if r.user else None,
+        reaction_type=r.reaction_type,
+        created_at=r.created_at
+    ) for r in reactions]
+
+@app.post("/situations/{situation_id}/reactions")
+def create_reaction(reaction: schemas.ReactionCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    db_reaction = crud.create_reaction(db, reaction, current_user["id"])
+    return db_reaction
+
+@app.delete("/situations/{situation_id}/reactions")
+def delete_reaction(request: schemas.ReactionDelete, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    if crud.delete_reaction(db, request.situation_id, current_user["id"], request.reaction_type):
+        return {"message": "Reaction deleted"}
+    raise HTTPException(status_code=404, detail="Reaction not found")

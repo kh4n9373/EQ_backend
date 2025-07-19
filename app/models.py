@@ -11,6 +11,7 @@ class User(Base):
     email = Column(String, unique=True, index=True)
     name : Optional[str] = Column(String)
     picture : Optional[str] = Column(String)
+    bio : Optional[str] = Column(String, nullable=True)
     encrypted_refresh_token: Optional[str] = Column(String)
     is_active: bool = True
     created_at: Optional[datetime] = Column(DateTime(timezone=True), server_default=func.now())
@@ -59,6 +60,7 @@ class Comment(Base):
     situation_id = Column(Integer, ForeignKey("situations.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     content = Column(String)
+    sentiment_analysis = Column(JSON, nullable=True)  # Lưu kết quả sentiment analysis
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     situation = relationship("Situation")
     user = relationship("User")

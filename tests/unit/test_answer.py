@@ -1,7 +1,27 @@
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
 
-def test_analyze_answer_success(client: TestClient, sample_data):
+@patch("app.openai_utils.analyze_eq")
+def test_analyze_answer_success(mock_analyze, client: TestClient, sample_data):
+    mock_analyze.return_value = (
+        {
+            "self_awareness": 8,
+            "empathy": 7,
+            "self_regulation": 6,
+            "communication": 8,
+            "decision_making": 7,
+        },
+        {
+            "self_awareness": "Good awareness",
+            "empathy": "Shows empathy",
+            "self_regulation": "Basic control",
+            "communication": "Good communication",
+            "decision_making": "Good decisions",
+        },
+    )
+
     situation = sample_data["situation"]
 
     answer_data = {
@@ -15,11 +35,19 @@ def test_analyze_answer_success(client: TestClient, sample_data):
     assert "reasoning" in data
     assert "question" in data
 
+    # Verify the mock was called
+    mock_analyze.assert_called_once()
 
-def test_analyze_answer_invalid_situation(client: TestClient):
+
+@patch("app.openai_utils.analyze_eq")
+def test_analyze_answer_invalid_situation(mock_analyze, client: TestClient):
+    mock_analyze.return_value = ({}, {})
+
     answer_data = {"situation_id": 999, "answer_text": "Test answer"}
     response = client.post("/analyze", json=answer_data)
     assert response.status_code == 404
+
+    mock_analyze.assert_not_called()
 
 
 def test_get_answers_by_situation(client: TestClient, sample_data):

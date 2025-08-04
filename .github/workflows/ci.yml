@@ -61,7 +61,6 @@ jobs:
 
     - name: Run database migrations
       run: |
-        cd eq_test_backend
         python -c "
         from app.database import engine
         from app.models import Base
@@ -70,7 +69,6 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-        cd eq_test_backend
         python -m pytest tests/ -v --cov=app --cov-report=xml --cov-report=html --cov-report=term
 
     - name: Upload coverage to Codecov
@@ -83,7 +81,6 @@ jobs:
 
     - name: Check coverage threshold
       run: |
-        cd eq_test_backend
         python -c "
         import xml.etree.ElementTree as ET
         tree = ET.parse('coverage.xml')
@@ -116,23 +113,19 @@ jobs:
 
     - name: Run Black (code formatting)
       run: |
-        cd eq_test_backend
         black --check --diff .
 
     - name: Run isort (import sorting)
       run: |
-        cd eq_test_backend
         isort --check-only --diff .
 
     - name: Run flake8 (linting)
       run: |
-        cd eq_test_backend
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
 
     - name: Run mypy (type checking)
       run: |
-        cd eq_test_backend
         mypy app/ --ignore-missing-imports
 
   security:
@@ -154,12 +147,10 @@ jobs:
 
     - name: Run Bandit (security linting)
       run: |
-        cd eq_test_backend
         bandit -r app/ -f json -o bandit-report.json || true
 
     - name: Run Safety (dependency vulnerability check)
       run: |
-        cd eq_test_backend
         safety check --json --output safety-report.json || true
 
   build:
@@ -176,7 +167,6 @@ jobs:
 
     - name: Build Docker image
       run: |
-        cd eq_test_backend
         docker build -t eq-test-backend:${{ github.sha }} .
         docker tag eq-test-backend:${{ github.sha }} eq-test-backend:latest
 

@@ -1,14 +1,13 @@
 # Hàm mock, sau này sẽ tích hợp OpenAI API
 import json
-import os
 import re
 
 import openai
-from dotenv import load_dotenv
 
-load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
-openai.base_url = os.getenv("OPENAI_BASE_URL")
+from app.settings import OPENAI_API_KEY, OPENAI_BASE_URL
+
+openai.api_key = OPENAI_API_KEY
+openai.base_url = OPENAI_BASE_URL
 
 
 def analyze_eq(situation: str, question: str, answer_text: str) -> dict:

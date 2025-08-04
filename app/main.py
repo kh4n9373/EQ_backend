@@ -5,7 +5,6 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
-from starlette.config import Config
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import crud, database, models, openai_utils, schemas
@@ -15,16 +14,13 @@ from app.authorization import (  # decrypt_refresh_token,
     get_current_user,
     oauth,
 )
-
-config = Config(".env")
-
-models.Base.metadata.create_all(bind=database.engine)
+from app.settings import CORS_ORIGINS, SECRET_KEY
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,7 +28,7 @@ app.add_middleware(
 
 app.add_middleware(
     SessionMiddleware,
-    secret_key=config("SECRET_KEY"),
+    secret_key=SECRET_KEY,
 )
 
 

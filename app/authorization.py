@@ -5,12 +5,16 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
-from starlette.config import Config
 
 from app import crud
 from app.database import SessionLocal
-
-config = Config(".env")
+from app.settings import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    ALGORITHM,
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    SECRET_KEY,
+)
 
 
 def get_db():
@@ -21,22 +25,18 @@ def get_db():
         db.close()
 
 
-oauth = OAuth(config)
+oauth = OAuth()
 oauth.register(
     name="google",
     server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-    client_id=config("GOOGLE_CLIENT_ID"),
-    client_secret=config("GOOGLE_CLIENT_SECRET"),
+    client_id=GOOGLE_CLIENT_ID,
+    client_secret=GOOGLE_CLIENT_SECRET,
     client_kwargs={
         "scope": "openid email profile",
         "access_type": "offline",
         "prompt": "consent",
     },
 )
-
-SECRET_KEY = config("SECRET_KEY")
-ALGORITHM = config("ALGORITHM")
-ACCESS_TOKEN_EXPIRE_MINUTES = config("ACCESS_TOKEN_EXPIRE_MINUTES", cast=int)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 

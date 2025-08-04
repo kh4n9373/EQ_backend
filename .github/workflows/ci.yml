@@ -156,7 +156,7 @@ jobs:
   build:
     needs: [test, lint, security]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
     
     steps:
     - name: Checkout code
@@ -164,14 +164,32 @@ jobs:
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+    
+    - name: Set Docker tag
+      run: |
+        if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+        elif [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
+          VERSION=latest
+        else
+          VERSION=sha-${GITHUB_SHA::7}
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
 
     - name: Build Docker image
       run: |
         docker build -t eq-test-backend:${{ github.sha }} .
-        docker tag eq-test-backend:${{ github.sha }} eq-test-backend:latest
 
     - name: Upload Docker image
-      uses: actions/upload-artifact@v4
+      uses: docker/build-push-action@v5
       with:
-        name: docker-image
-        path: eq_test_backend/ 
+        context: .
+        push: true
+        tags: |
+          docker.io/${{ secrets.DOCKERHUB_USERNAME }}/eq-test-backend:${{ env.VERSION }}

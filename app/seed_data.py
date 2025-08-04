@@ -1,9 +1,8 @@
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from app.models import Topic, Situation
-from app.database import SessionLocal
 from sqlalchemy.orm import Session
+
+from app.database import SessionLocal
+from app.models import Situation, Topic
+
 
 def seed():
     db: Session = SessionLocal()
@@ -25,31 +24,36 @@ def seed():
         Situation(
             topic_id=love.id,
             context="Người yêu bạn tỏ ra lạnh nhạt, bạn nghi ngờ có người thứ ba.",
-            question="Bạn sẽ làm gì và nói gì với người yêu trong tình huống này?"
+            question="Bạn sẽ làm gì và nói gì với người yêu trong tình huống này?",
         ),
         Situation(
             topic_id=work.id,
             context="Đồng nghiệp liên tục trễ deadline khiến nhóm bị ảnh hưởng.",
-            question="Bạn sẽ xử lý thế nào với đồng nghiệp này?"
+            question="Bạn sẽ xử lý thế nào với đồng nghiệp này?",
         ),
         Situation(
             topic_id=family.id,
             context="Cha mẹ thường xuyên so sánh bạn với người khác.",
-            question="Bạn sẽ phản ứng ra sao khi bị so sánh?"
+            question="Bạn sẽ phản ứng ra sao khi bị so sánh?",
         ),
         Situation(
             topic_id=friends.id,
             context="Bạn phát hiện bạn thân nói xấu mình sau lưng.",
-            question="Bạn sẽ đối diện và giải quyết như thế nào?"
+            question="Bạn sẽ đối diện và giải quyết như thế nào?",
         ),
     ]
     for s in situations:
-        exists = db.query(Situation).filter_by(context=s.context, question=s.question).first()
+        exists = (
+            db.query(Situation)
+            .filter_by(context=s.context, question=s.question)
+            .first()
+        )
         if not exists:
             db.add(s)
     db.commit()
     db.close()
     print("Đã seed dữ liệu mẫu!")
 
+
 if __name__ == "__main__":
-    seed() 
+    seed()

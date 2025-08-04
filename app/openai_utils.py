@@ -1,17 +1,19 @@
 # Hàm mock, sau này sẽ tích hợp OpenAI API
 import json
+import os
 import re
+
 import openai
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 openai.base_url = os.getenv("OPENAI_BASE_URL")
 
+
 def analyze_eq(situation: str, question: str, answer_text: str) -> dict:
     prompt = f"""
-Bạn là một chuyên gia EQ. Hãy phân tích câu trả lời dưới đây và chấm điểm theo 5 trụ cột EQ. 
+Bạn là một chuyên gia EQ. Hãy phân tích câu trả lời dưới đây và chấm điểm theo 5 trụ cột EQ.
 Đồng thời giải thích lý do cho từng điểm (vì sao bạn cho điểm, vì sao cho điểm cao, vì sao không cho điểm tuyệt đối).
 
 Các trụ cột EQ:
@@ -45,15 +47,18 @@ Hãy trả về kết quả dưới dạng JSON với cấu trúc sau:
     "decision_making": "<giải thích>"
   }}
 }}
-    """
+"""
 
     response = openai.chat.completions.create(
         model="gemini-1.5-flash",
         messages=[
-            {"role": "system", "content": "Bạn là một chuyên gia EQ và đánh giá hành vi con người dựa trên phản ứng cảm xúc."},
-            {"role": "user", "content": prompt}
+            {
+                "role": "system",
+                "content": "Bạn là một chuyên gia EQ và đánh giá hành vi con người dựa trên phản ứng cảm xúc.",
+            },
+            {"role": "user", "content": prompt},
         ],
-        temperature=0.3
+        temperature=0.3,
     )
 
     reply = response.choices[0].message.content
@@ -69,14 +74,14 @@ Hãy trả về kết quả dưới dạng JSON với cấu trúc sau:
                 "empathy": None,
                 "self_regulation": None,
                 "communication": None,
-                "decision_making": None
+                "decision_making": None,
             },
             "reasoning": {
                 "self_awareness": "Không phân tích được.",
                 "empathy": "Không phân tích được.",
                 "self_regulation": "Không phân tích được.",
                 "communication": "Không phân tích được.",
-                "decision_making": "Không phân tích được."
+                "decision_making": "Không phân tích được.",
             },
-            "error": str(e)
+            "error": str(e),
         }

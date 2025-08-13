@@ -4,7 +4,7 @@ from fastapi import Depends
 from fastapi.testclient import TestClient
 
 from app.api.v1 import deps as deps_module
-from app.main_v2 import app
+from app.main import app
 
 
 class ObjUser:

@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.database import Base
 from app.core.security import create_access_token
 from app.core.security import get_current_user as real_get_current_user
-from app.main_v2 import app
+from app.main import app
 from app.models import Answer, Comment, Situation, Topic, User
 
 # Test database setup - use SQLite in-memory for testing

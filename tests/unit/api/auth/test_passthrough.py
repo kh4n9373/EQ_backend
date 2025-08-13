@@ -2,7 +2,7 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.api.v1.endpoints import auth as auth_endpoint
-from app.main_v2 import app
+from eq_test_backend.app.main import app
 
 
 def test_auth_callback_http_exception_passthrough(monkeypatch):

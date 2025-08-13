@@ -5,7 +5,7 @@ import logging
 from typing import Optional
 
 import redis
-from sqlalchemy import func
+from sqlalchemy import func, inspect
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import settings
@@ -38,6 +38,17 @@ def get_redis_client() -> Optional["redis.Redis"]:
 async def update_database_metrics():
     """Update database metrics from actual DB counts."""
     try:
+        # Skip if tables are not yet created (e.g., before migrations run)
+        inspector = inspect(engine)
+        existing_tables = set(inspector.get_table_names())
+        required_tables = {"users", "situations", "reactions", "comments"}
+        if not required_tables.issubset(existing_tables):
+            missing = ", ".join(sorted(required_tables - existing_tables))
+            logger.info(
+                f"Skipping metrics update; missing tables: {missing}. Will retry later."
+            )
+            return
+
         with SessionLocal() as db:
             users_count = db.query(func.count(User.id)).scalar() or 0
             situations_count = db.query(func.count(Situation.id)).scalar() or 0
@@ -54,7 +65,8 @@ async def update_database_metrics():
             )
 
     except Exception as e:
-        logger.error(f"Error updating database metrics: {e}")
+        # Do not crash app if metrics fail; log and continue
+        logger.warning(f"Error updating database metrics: {e}")
 
 
 async def update_active_users_from_redis():

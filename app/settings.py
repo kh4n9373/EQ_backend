@@ -1,39 +1,44 @@
-import os
+from typing import List
 
-from dotenv import load_dotenv
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-load_dotenv()
 
-# Database settings
-DATABASE_URL: str = os.getenv(
-    "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/eq_test_db"
-)
+class Settings(BaseSettings):
+    # default to local docker-compose postgres service
+    database_url: str = "postgresql://eq_user:eq_pass@localhost:5432/eq_test"
 
-# JWT settings
-SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-here")
-ALGORITHM: str = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+    secret_key: str
+    algorithm: str
+    access_token_expire_minutes: int = 30
 
-# Google OAuth settings
-GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
-GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    google_client_id: str
+    google_client_secret: str
 
-# OpenAI settings
-OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    openai_api_key: str
+    openai_base_url: str
 
-# CORS settings
-CORS_ORIGINS: list = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:3001",
-]
+    cors_extra_origins: List[str] = Field(default=[], alias="CORS_ORIGINS")
 
-# Add any additional CORS origins from environment
-if os.getenv("CORS_ORIGINS"):
-    CORS_ORIGINS.extend(os.getenv("CORS_ORIGINS", "").split(","))
+    @property
+    def cors_origin(self) -> List[str]:
+        base_origins = [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:3001",
+        ]
+        return list(set(base_origins + self.cors_extra_origins))
 
-# Environment
-ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
-DEBUG: bool = ENVIRONMENT == "development"
+    environment: str = "dev"
+
+    @property
+    def debug(self) -> bool:
+        return self.environment == "dev"
+
+    model_config = SettingsConfigDict(
+        env_file=".env", case_sensitive=False, extra="ignore"
+    )
+
+
+settings = Settings()

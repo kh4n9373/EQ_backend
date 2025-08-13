@@ -1,3 +1,17 @@
 /venv
 .env
 app/__pycache__/
+
+__pycache__
+.venv
+.coverage
+coverage.xml
+.log
+.tmp
+temp.json
+.sqlite
+.sqlite3
+.db
+test.db
+.vscode/,
+.DS_Store

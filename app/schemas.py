@@ -16,7 +16,7 @@ class TopicOut(TopicBase):
     id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class SituationBase(BaseModel):
@@ -34,7 +34,7 @@ class SituationOut(SituationBase):
     id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class SituationContribute(BaseModel):
@@ -56,7 +56,7 @@ class SituationContributeOut(BaseModel):
     created_at: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class AnswerBase(BaseModel):
@@ -77,7 +77,7 @@ class AnswerOut(AnswerBase):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ResultBase(BaseModel):
@@ -93,7 +93,7 @@ class ResultOut(ResultBase):
     created_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class UserShortOut(BaseModel):
@@ -102,7 +102,7 @@ class UserShortOut(BaseModel):
     picture: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class UserProfileOut(BaseModel):
@@ -113,7 +113,7 @@ class UserProfileOut(BaseModel):
     bio: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class SituationFeedOut(BaseModel):
@@ -142,7 +142,7 @@ class CommentOut(CommentBase):
     user: UserShortOut
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ReactionBase(BaseModel):
@@ -160,13 +160,13 @@ class ReactionOut(ReactionBase):
     user: UserShortOut
 
     class Config:
-        orm_mode = True
-
-
-class SentimentAnalysisRequest(BaseModel):
-    content: str
+        from_attributes = True
 
 
 class ReactionDelete(BaseModel):
     situation_id: int
     reaction_type: str
+
+
+class SentimentAnalysisRequest(BaseModel):
+    content: str

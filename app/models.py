@@ -13,7 +13,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-from app.database import Base
+from app.core.database import Base
 
 
 class User(Base):
@@ -62,11 +62,13 @@ class Answer(Base):
     __tablename__ = "answers"
     id = Column(Integer, primary_key=True, index=True)
     situation_id = Column(Integer, ForeignKey("situations.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     answer_text = Column(String)
     scores = Column(JSON)  # 5 trụ EQ
     reasoning = Column(JSON)  # Giải thích cho từng trụ EQ
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     situation = relationship("Situation", back_populates="answers")
+    user = relationship("User")
 
 
 class Result(Base):
@@ -83,6 +85,8 @@ class Comment(Base):
     situation_id = Column(Integer, ForeignKey("situations.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     content = Column(String)
+    sentiment_score = Column(Integer, nullable=True)
+    sentiment_label = Column(String, nullable=True)
     sentiment_analysis = Column(JSON, nullable=True)  # Lưu kết quả sentiment analysis
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     situation = relationship("Situation")

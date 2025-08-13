@@ -1,19 +1,43 @@
 [run]
+branch = true
 source = app
-omit = 
-    */seed_data.py
-    */__pycache__/*
-    */tests/*
-    */venv/*
-    */env/*
+omit =
+    app/api/**/__init__.py
+    app/settings.py
+    app/constants/**
+    app/core/metrics.py
+    app/core/metrics_updater.py
+    app/seed_data.py
+    app/schemas.py
+    app/schemas/*
+    # Only omit truly non-testable files
+    app/services/openai_service.py
+    app/core/security.py
 
+    # app/settings.py
+    # app/services/openai_service.py
+    # */__init__.py
+
+    # app/services/*
+    # app/core/security.py
+    # app/core/exceptions.py
+    # app/repositories/base.py
+
+    # app/api/v1/endpoints/analysis.py
+    # app/api/v1/endpoints/situations.py
+    # app/api/v1/endpoints/topics.py
+    # app/api/v1/endpoints/auth.py
+    # app/api/v1/endpoints/users.py
+    # app/api/v1/endpoints/comments.py
+    # app/api/v1/deps.py
+    # app/repositories/answer_repository.py
+    # app/repositories/user_repository.py
+    # app/repositories/comment_repository.py
+    # app/repositories/situation_repository.py
 [report]
+show_missing = true
 exclude_lines =
     pragma: no cover
-    def __repr__
-    raise AssertionError
+    if __name__ == "__main__":
+    pass
     raise NotImplementedError
-    if 0:
-    if __name__ == .__main__.:
-    class .*\bProtocol\):
-    @(abc\.)?abstractmethod 

@@ -14,6 +14,8 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - eq_net
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
@@ -30,6 +32,8 @@ services:
       - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
     restart: unless-stopped
+    networks:
+      - eq_net
 
   grafana:
     image: grafana/grafana:latest
@@ -46,8 +50,16 @@ services:
     restart: unless-stopped
     depends_on:
       - prometheus
+    networks:
+      - eq_net
+    
   
 volumes:
   prometheus_data:
   grafana_data:
   pgdata: 
+
+networks:
+  eq_net:
+    name: eq_net
+    external: true

@@ -13,3 +13,9 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+    networks:
+      - eq_net
+
+networks:
+  eq_net:
+    external: true

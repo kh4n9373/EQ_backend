@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eq-backend-config
+  namespace: eq-backend
+data:
+  ENVIRONMENT: "prod"
+  LOG_LEVEL: "INFO"
+  OPENAI_BASE_URL: "https://api.openai.com/v1"
+  CORS_ORIGINS: "*" 

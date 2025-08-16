@@ -84,10 +84,16 @@ def upgrade():
     )
     op.create_index("idx_situations_topic_id", "situations", ["topic_id"], unique=False)
     op.create_index("idx_situations_user_id", "situations", ["user_id"], unique=False)
-    op.create_index("idx_situations_created_at", "situations", ["created_at"], unique=False)
-    op.create_index("idx_comments_situation_id", "comments", ["situation_id"], unique=False)
+    op.create_index(
+        "idx_situations_created_at", "situations", ["created_at"], unique=False
+    )
+    op.create_index(
+        "idx_comments_situation_id", "comments", ["situation_id"], unique=False
+    )
     op.create_index("idx_comments_user_id", "comments", ["user_id"], unique=False)
-    op.create_index("idx_reactions_situation_id", "reactions", ["situation_id"], unique=False)
+    op.create_index(
+        "idx_reactions_situation_id", "reactions", ["situation_id"], unique=False
+    )
     op.create_index("idx_reactions_user_id", "reactions", ["user_id"], unique=False)
     op.create_index("idx_reactions_type", "reactions", ["reaction_type"], unique=False)
     op.create_index("idx_users_email", "users", ["email"], unique=False)

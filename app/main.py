@@ -1,5 +1,5 @@
 import asyncio
-
+import logging
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +12,12 @@ from app.api.v1.api import router
 from app.core.config import settings
 from app.core.exceptions import APIException
 from app.core.metrics_updater import start_metrics_updater
+from app.core.logging_config import setup_logging
+
+
+logger = logging.getLogger(__name__)
+
+setup_logging()
 
 app = FastAPI(
     title="EmoStagram API",
@@ -38,6 +44,7 @@ instrumentator = Instrumentator(
     should_instrument_requests_inprogress=True,
 )
 instrumentator.instrument(app)
+instrumentator.expose(app)
 
 
 @app.exception_handler(APIException)
@@ -61,13 +68,26 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.get("/health")
 def health_check():
     return {"success": True, "message": "Healthy", "data": {"status": "ok"}}
-
+@app.get("/health/db")
+def db_health_check():
+    try:
+        from app.core.database import engine
+        with engine.connect() as conn:
+            conn.exec_driver_sql("SELECT 1")
+            return {"success": True, "message": "Database healthy", "data": {"status": "connected"}}
+    except Exception as e:
+        return JSONResponse(
+            status_code=503,
+            content={"success": False, "message": "Database unhealthy", "data": {"error": str(e)}}
+        )
+    
 
 app.include_router(router, prefix="/api/v1")
 
 
 @app.on_event("startup")
 async def startup_event():
+    logger.info("Application_starting...")
     asyncio.create_task(start_metrics_updater())
 
 

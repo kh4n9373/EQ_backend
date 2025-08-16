@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", case_sensitive=False, extra="ignore"
     )
+    log_level: str = "INFO"
+    log_format: str = "text"
 
 
 settings = Settings()

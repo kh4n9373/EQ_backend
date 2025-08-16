@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "eq-test-backend"
+    static_configs:
+      - targets: ["host.docker.internal:5001"]
+    metrics_path: "/api/v1/metrics/"
+    scrape_interval: 5s
+    scrape_timeout: 5s

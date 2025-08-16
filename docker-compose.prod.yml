@@ -1,0 +1,15 @@
+services:
+  app:
+    platform: linux/amd64
+    image: docker.io/khangpt/eq-test-backend:latest
+    env_file:
+      - .env.prod
+    ports:
+      - "8080:5001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped

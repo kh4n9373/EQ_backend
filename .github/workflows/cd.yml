@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: eq_test_backend
+        working-directory: ./
 
     env:
       IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/eq-test-backend:sha-${{ github.event.workflow_run.head_sha }}

@@ -2,17 +2,16 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: eq-backend-migrate
-  namespace: eq-backend
+  # namespace injected at apply time (avoid hardcoding)
 spec:
-  backoffLimit: 4
   template:
     spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: REPLACE_IMG
+          image: docker.io/khangpt/eq-test-backend
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef: { name: eq-backend-secrets }
             - configMapRef: { name: eq-backend-config }
-          command: ["sh","-c","alembic upgrade head"]
+          command: ["sh","-c","pip install -q alembic && alembic upgrade head"]

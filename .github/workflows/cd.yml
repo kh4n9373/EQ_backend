@@ -1,0 +1,121 @@
+name: CD - Deploy to GKE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - './'
+
+concurrency:
+  group: cd-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: eq_test_backend
+
+    env:
+      IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/eq-test-backend:sha-${{ github.sha }}
+      K8S_NAMESPACE: ${{ secrets.K8S_NAMESPACE }}
+      CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      REDIS_URL: ${{ secrets.REDIS_URL }}
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      ALGORITHM: ${{ secrets.ALGORITHM }}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+      GKE_CLUSTER: ${{ secrets.GKE_CLUSTER }}
+      GKE_LOCATION: ${{ secrets.GKE_LOCATION }}
+      WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_SA_EMAIL: ${{ secrets.GCP_SA_EMAIL }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.29.0
+
+      - name: Auth to GCP (OIDC)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SA_EMAIL }}
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Get GKE credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER }}
+          location: ${{ env.GKE_LOCATION }}
+          project_id: ${{ env.GCP_PROJECT }}
+
+      - name: Resolve namespace
+        id: ns
+        shell: bash
+        run: |
+          set -euo pipefail
+          NS="${K8S_NAMESPACE:-eq-backend}"
+          echo "namespace=$NS" >> "$GITHUB_OUTPUT"
+          kubectl get ns "$NS" >/dev/null 2>&1 || kubectl create namespace "$NS"
+
+      - name: Apply ConfigMap
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl -n "${{ steps.ns.outputs.namespace }}" apply -f k8s/configmap.yaml
+          if [ -n "${CORS_ORIGINS:-}" ]; then
+            kubectl -n "${{ steps.ns.outputs.namespace }}" patch configmap eq-backend-config --type merge -p "{\"data\":{\"CORS_ORIGINS\":\"${CORS_ORIGINS}\"}}"
+          fi
+
+      - name: Create/Update Secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl -n "${{ steps.ns.outputs.namespace }}" create secret generic eq-backend-secrets \
+            --from-literal=DATABASE_URL="$DATABASE_URL" \
+            --from-literal=REDIS_URL="$REDIS_URL" \
+            --from-literal=SECRET_KEY="$SECRET_KEY" \
+            --from-literal=ALGORITHM="$ALGORITHM" \
+            --from-literal=ACCESS_TOKEN_EXPIRE_MINUTES="$ACCESS_TOKEN_EXPIRE_MINUTES" \
+            --from-literal=GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
+            --from-literal=GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET" \
+            --from-literal=OPENAI_API_KEY="$OPENAI_API_KEY" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Run DB migrations (Job)
+        shell: bash
+        run: |
+          set -euo pipefail
+          NS="${{ steps.ns.outputs.namespace }}"
+          kubectl -n "$NS" delete job eq-backend-migrate --ignore-not-found --wait=true
+          kubectl -n "$NS" apply -k k8s
+          if ! kubectl -n "$NS" wait --for=condition=complete job/eq-backend-migrate --timeout=300s; then
+            echo "Migration job failed or timed out. Fetching logs..." >&2
+            kubectl -n "$NS" logs job/eq-backend-migrate --all-containers || true
+            exit 1
+          fi
+
+      - name: Deploy application (Deployment + Service)
+        shell: bash
+        run: |
+          set -euo pipefail
+          NS="${{ steps.ns.outputs.namespace }}"
+          kubectl -n "$NS" apply -k k8s
+          kubectl -n "$NS" set image deploy/eq-backend app="${IMAGE}" --record
+          kubectl -n "$NS" scale deploy/eq-backend --replicas=1
+          kubectl -n "$NS" rollout status deploy/eq-backend
+          echo "Service details:"
+          kubectl -n "$NS" get svc eq-backend -o wide
+
+

@@ -252,3 +252,76 @@ kubectl -n eq-backend get svc eq-backend -w
 Ghi chú:
 - Autopilot có thể mất vài phút để cấp node lần đầu; đặt `resources.requests/limits` hợp lý giúp scheduler dễ sắp chỗ.
 - Hãy đổi `images.newTag` trong `k8s/kustomization.yaml` sang tag build của CI (ví dụ `sha-<commit>`) để rollout/rollback chính xác.
+
+### 8) Chi tiết về file cd.yml
+
+Mục tiêu: Khi push lên `main`, GitHub Actions sẽ tự động deploy phiên bản mới lên GKE bằng cơ chế OIDC (không cần lưu kubeconfig/JSON key trong repo).
+
+1) Cơ chế tổng quan
+- GitHub Actions (runner) dùng OpenID Connect (OIDC) phát hành một token danh tính ngắn hạn.
+- Google Cloud xác thực token OIDC này qua Workload Identity Federation (WIF) và cho phép runner “mạo danh” (impersonate) một Service Account (SA) trong GCP.
+- Sau khi xác thực, workflow gọi `get-gke-credentials` để có kubecontext → chạy `kubectl` apply Kustomize (`k8s/`), chạy Job migrate, set image, scale replicas.
+
+2) Các secret cần cấu hình trong GitHub (Settings → Secrets and variables → Actions)
+- `GCP_PROJECT`: Project ID GCP (ví dụ `emostagram`).
+- `GKE_CLUSTER`: Tên cluster GKE (ví dụ `autopilot-cluster-1`).
+- `GKE_LOCATION`: Vùng của cluster (ví dụ `australia-southeast1`).
+- `WORKLOAD_IDENTITY_PROVIDER`: Đường dẫn đầy đủ của WIF provider, dạng `projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github-pool/providers/github-provider`.
+- `GCP_SA_EMAIL`: Email của Service Account triển khai, ví dụ `eq-backend-deployer@<PROJECT_ID>.iam.gserviceaccount.com`.
+- `K8S_NAMESPACE`: Namespace đích (ví dụ `eq-backend`).
+- `DOCKERHUB_USERNAME`: Tài khoản Docker Hub để tạo tag image.
+- App secrets: `CORS_ORIGINS` (JSON list), `DATABASE_URL`, `REDIS_URL`, `SECRET_KEY`, `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `OPENAI_API_KEY`.
+
+3) OIDC là gì? Workload Identity Federation là gì?
+- OIDC: chuẩn xác thực mở, cho phép GitHub phát hành token danh tính cho workflow run. Token này dùng để xin quyền truy cập trong GCP mà không cần lưu key lâu dài.
+- WIF: cơ chế của GCP để “liên kết” danh tính bên ngoài (GitHub OIDC) với một Service Account trong GCP. Nhờ đó, workflow có thể impersonate SA mà không cần key.
+
+4) Tạo WIF + Provider + Service Account 
+```bash
+export PROJECT=<PROJECT_ID>
+gcloud config set project "$PROJECT"
+
+gcloud iam workload-identity-pools create github-pool \
+  --project="$PROJECT" --location=global --display-name="GitHub OIDC Pool"
+gcloud iam workload-identity-pools providers create-oidc github-provider \
+  --project="$PROJECT" --location=global --workload-identity-pool=github-pool \
+  --display-name="GitHub Provider" \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --attribute-condition="attribute.repository=='<OWNER>/<REPO>'"
+
+# Tạo SA để deploy
+gcloud iam service-accounts create eq-backend-deployer \
+  --project="$PROJECT" --display-name="Eq backend deployer"
+
+# Gán quyền tối thiểu (triển khai k8s)
+gcloud projects add-iam-policy-binding "$PROJECT" \
+  --member="serviceAccount:eq-backend-deployer@${PROJECT}.iam.gserviceaccount.com" \
+  --role="roles/container.admin"
+
+# Cho phép GitHub OIDC mạo danh SA
+POOL_NAME=$(gcloud iam workload-identity-pools describe github-pool --location=global --project="$PROJECT" --format='value(name)')
+gcloud iam service-accounts add-iam-policy-binding "eq-backend-deployer@${PROJECT}.iam.gserviceaccount.com" \
+  --project="$PROJECT" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/${POOL_NAME}/attribute.repository/<OWNER>/<REPO>"
+
+# Lấy PROJECT_NUMBER và in ra WORKLOAD_IDENTITY_PROVIDER
+PROJ_NUM=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')
+echo "WORKLOAD_IDENTITY_PROVIDER=projects/${PROJ_NUM}/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
+echo "GCP_SA_EMAIL=eq-backend-deployer@${PROJECT}.iam.gserviceaccount.com"
+```
+
+5) Lấy thông tin cluster
+```bash
+gcloud container clusters list --format='table(name,location,status)'
+# GKE_CLUSTER, GKE_LOCATION
+```
+
+6) cd.yml làm gì khi chạy?
+- Auth GCP qua OIDC → `get-gke-credentials` lấy kubecontext.
+- Apply `k8s/configmap.yaml`.
+- Tạo/cập nhật `Secret eq-backend-secrets` từ secrets ở GitHub.
+- Apply `k8s/` (Kustomize), chạy Job migrate (đợi hoàn tất).
+- Set image của Deployment sang tag build mới và scale `replicas=1`.
+- In thông tin Service (LoadBalancer) để kiểm tra.

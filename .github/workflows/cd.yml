@@ -78,6 +78,17 @@ jobs:
           if [ -n "${CORS_ORIGINS:-}" ]; then
             kubectl -n "${{ steps.ns.outputs.namespace }}" patch configmap eq-backend-config --type merge -p "{\"data\":{\"CORS_ORIGINS\":\"${CORS_ORIGINS}\"}}"
           fi
+          DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          DEPLOY_SHA="${GITHUB_SHA}"
+          DEPLOY_IMAGE="${IMAGE}"
+          DEPLOY_BY="${GITHUB_ACTOR}"
+          kubectl -n "$NS" patch configmap eq-backend-config --type merge \
+            -p "{\"data\":{
+              \"DEPLOYED_AT\":\"${DEPLOYED_AT}\",
+              \"DEPLOY_SHA\":\"${DEPLOY_SHA}\",
+              \"DEPLOY_IMAGE\":\"${DEPLOY_IMAGE}\",
+              \"DEPLOY_BY\":\"${DEPLOY_BY}\"
+            }}"
 
       - name: Create/Update Secret
         shell: bash
@@ -120,3 +131,36 @@ jobs:
           kubectl -n "$NS" get svc eq-backend -o wide
 
 
+      - name: Get Service info
+        id: svc
+        shell: bash
+        run: |
+          NS="${{ steps.ns.outputs.namespace }}"
+          IP=$(kubectl -n "$NS" get svc eq-backend -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          HOST=$(kubectl -n "$NS" get svc eq-backend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+          echo "ip=$IP" >> "$GITHUB_OUTPUT"
+          echo "host=$HOST" >> "$GITHUB_OUTPUT"
+
+      - name: Notify Discord (success)
+        if: ${{ success() }}
+        run: |
+          MSG="✅ Deploy success
+          Repo: ${GITHUB_REPOSITORY}
+          Commit: ${GITHUB_SHA}
+          Image: ${IMAGE}
+          Env: ns=${{ steps.ns.outputs.namespace }}
+          LB: ${{ steps.svc.outputs.ip }} ${{ steps.svc.outputs.host }}
+          Health: http://${{ steps.svc.outputs.ip }}/health"
+              curl -s -H 'Content-Type: application/json' \
+                -d "{\"content\": $(jq -Rsa . <<< \"$MSG\") }" \
+                "${{ secrets.DISCORD_WEBHOOK }}"
+
+      - name: Notify Discord (failure)
+        if: ${{ failure() }}
+        run: |
+          MSG="❌ Deploy failed
+          Repo: ${GITHUB_REPOSITORY}
+          Commit: ${GITHUB_SHA}"
+              curl -s -H 'Content-Type: application/json' \
+                -d "{\"content\": $(jq -Rsa . <<< \"$MSG\") }" \
+                "${{ secrets.DISCORD_WEBHOOK }}"

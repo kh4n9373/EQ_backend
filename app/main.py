@@ -69,17 +69,17 @@ async def global_exception_handler(request: Request, exc: Exception):
 def health_check():
     # return {"success": True, "message": "Healthy", "data": {"status": "ok"}}
     return {
-        "success":True,
-        "message":"Healthy",
+        "success": True,
+        "message": "Healthy",
         "data": {
-            "status":"ok",
+            "status": "ok",
             "deployment": {
                 "at": settings.deployed_at,
                 "sha": settings.deploy_sha,
                 "image": settings.deploy_image,
                 "by": settings.deploy_by,
-            }
-        }
+            },
+        },
     }
 
 

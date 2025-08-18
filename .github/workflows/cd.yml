@@ -74,7 +74,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          kubectl -n "${{ steps.ns.outputs.namespace }}" apply -f eq_test_backend/k8s/configmap.yaml
+          kubectl -n "${{ steps.ns.outputs.namespace }}" apply -f k8s/configmap.yaml
           if [ -n "${CORS_ORIGINS:-}" ]; then
             kubectl -n "${{ steps.ns.outputs.namespace }}" patch configmap eq-backend-config --type merge -p "{\"data\":{\"CORS_ORIGINS\":\"${CORS_ORIGINS}\"}}"
           fi

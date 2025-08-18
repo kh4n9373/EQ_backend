@@ -7,7 +7,7 @@ permissions:
 on:
   workflow_dispatch:
   workflow_run:
-    workflows: ["CI/CD Pipeline"]
+    workflows: ["CI Pipeline"]
     types: [completed]
     branches: [main]
 
@@ -19,9 +19,12 @@ jobs:
   deploy:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: eq_test_backend
 
     env:
-      IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/eq-test-backend:latest
+      IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/eq-test-backend:sha-${{ github.event.workflow_run.head_sha }}
       K8S_NAMESPACE: ${{ secrets.K8S_NAMESPACE }}
       CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -78,6 +81,17 @@ jobs:
           if [ -n "${CORS_ORIGINS:-}" ]; then
             kubectl -n "${{ steps.ns.outputs.namespace }}" patch configmap eq-backend-config --type merge -p "{\"data\":{\"CORS_ORIGINS\":\"${CORS_ORIGINS}\"}}"
           fi
+          DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          DEPLOY_SHA="${{ github.event.workflow_run.head_sha }}"
+          DEPLOY_IMAGE="${IMAGE}"
+          DEPLOY_BY="${GITHUB_ACTOR}"
+          kubectl -n "${{ steps.ns.outputs.namespace }}" patch configmap eq-backend-config --type merge \
+            -p "{\"data\":{
+              \"DEPLOYED_AT\":\"${DEPLOYED_AT}\",
+              \"DEPLOY_SHA\":\"${DEPLOY_SHA}\",
+              \"DEPLOY_IMAGE\":\"${DEPLOY_IMAGE}\",
+              \"DEPLOY_BY\":\"${DEPLOY_BY}\"
+            }}"
 
       - name: Create/Update Secret
         shell: bash
@@ -120,3 +134,39 @@ jobs:
           kubectl -n "$NS" get svc eq-backend -o wide
 
 
+      - name: Install jq (for Discord message)
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Get Service info
+        id: svc
+        shell: bash
+        run: |
+          NS="${{ steps.ns.outputs.namespace }}"
+          IP=$(kubectl -n "$NS" get svc eq-backend -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          HOST=$(kubectl -n "$NS" get svc eq-backend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+          echo "ip=$IP" >> "$GITHUB_OUTPUT"
+          echo "host=$HOST" >> "$GITHUB_OUTPUT"
+
+      - name: Notify Discord (success)
+        if: ${{ success() }}
+        run: |
+          MSG="✅ Deploy success
+          Repo: ${GITHUB_REPOSITORY}
+          Commit: ${{ github.event.workflow_run.head_sha }}
+          Image: ${IMAGE}
+          Env: ns=${{ steps.ns.outputs.namespace }}
+          LB: ${{ steps.svc.outputs.ip }} ${{ steps.svc.outputs.host }}
+          Health: http://${{ steps.svc.outputs.ip }}/health"
+              curl -s -H 'Content-Type: application/json' \
+                -d "{\"content\": $(jq -Rsa . <<< \"$MSG\") }" \
+                "${{ secrets.DISCORD_WEBHOOK }}"
+
+      - name: Notify Discord (failure)
+        if: ${{ failure() }}
+        run: |
+          MSG="❌ Deploy failed
+          Repo: ${GITHUB_REPOSITORY}
+          Commit: ${GITHUB_SHA}"
+              curl -s -H 'Content-Type: application/json' \
+                -d "{\"content\": $(jq -Rsa . <<< \"$MSG\") }" \
+                "${{ secrets.DISCORD_WEBHOOK }}"

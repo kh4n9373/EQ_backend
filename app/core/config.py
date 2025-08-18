@@ -43,5 +43,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "text"
 
+    deployed_at: str = ""
+    deploy_sha: str = ""
+    deploy_image: str = ""
+    deploy_by: str = ""
+
 
 settings = Settings()

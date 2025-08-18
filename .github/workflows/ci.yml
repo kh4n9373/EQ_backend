@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CI Pipeline
 
 permissions:
   contents: read
@@ -200,3 +200,4 @@ jobs:
         platforms: linux/amd64, linux/arm64/v8
         tags: |
           docker.io/${{ secrets.DOCKERHUB_USERNAME }}/eq-test-backend:${{ env.VERSION }}
+          docker.io/${{ secrets.DOCKERHUB_USERNAME }}/eq-test-backend:sha-${{ github.sha }}

@@ -1,4 +1,4 @@
-## Cách mình triển khai Kubernetes 
+## Cách mình triển khai project bày trên Kubernetes 
 
 Phần đầu mình sẽ giải thích K8s hoạt động như thế nào, các khái niệm cốt lõi và vì sao cần chúng. Sau đó, cách mình áp dụng trực tiếp vào dự án này: mục tiêu deploy, các thành phần dùng, cách cấu hình, và các lệnh triển khai sau khi CI đã push image lên Docker Hub.
 
@@ -62,7 +62,7 @@ Vì sao dùng những thành phần này?
 ### 3) Yêu cầu trước khi deploy
 
 - Có cluster K8s sẵn (minikube hoặc cloud) và `kubectl` trỏ đúng cluster.
-- CI đã build/push image đa kiến trúc (linux/amd64, linux/arm64) lên Docker Hub.
+- CI đã build/push image lên Docker Hub.
 - Có file `.env` tại root repo chứa biến môi trường cần thiết (không commit). Xem `.env.example` để biết những thành phần cần thiết
 
 ### 4) Các bước triển khai sau khi CI đã push image
@@ -87,17 +87,20 @@ kubectl -n "$K8S_NAMESPACE" apply -f k8s/configmap.yaml
 kubectl -n "$K8S_NAMESPACE" patch configmap eq-backend-config --type merge -p "{\"data\":{\"CORS_ORIGINS\":\"${CORS_ORIGINS}\"}}"
 ```
 
-4) Tạo/Update Secret từ biến môi trường hiện tại (nguồn là `.env`)
+4) Tạo/Update Secret từ file `.env.secrets` (gọn, không gõ từng biến)
 ```bash
+# .env.secrets chỉ chứa các dòng key=value nhạy cảm, ví dụ:
+# DATABASE_URL=postgresql://<user>:<pass>@<host>:5432/<db>?sslmode=require
+# REDIS_URL=redis://:<password>@<redis-host>:6379/0
+# SECRET_KEY=...
+# ALGORITHM=HS256
+# ACCESS_TOKEN_EXPIRE_MINUTES=30
+# GOOGLE_CLIENT_ID=...
+# GOOGLE_CLIENT_SECRET=...
+# OPENAI_API_KEY=...
+
 kubectl -n "$K8S_NAMESPACE" create secret generic eq-backend-secrets \
-  --from-literal=DATABASE_URL="$DATABASE_URL" \
-  --from-literal=REDIS_URL="$REDIS_URL" \
-  --from-literal=SECRET_KEY="$SECRET_KEY" \
-  --from-literal=ALGORITHM="$ALGORITHM" \
-  --from-literal=ACCESS_TOKEN_EXPIRE_MINUTES="$ACCESS_TOKEN_EXPIRE_MINUTES" \
-  --from-literal=GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
-  --from-literal=GOOGLE_CLIENT_SECRET="$GOOGLE_CLIENT_SECRET" \
-  --from-literal=OPENAI_API_KEY="$OPENAI_API_KEY" \
+  --from-env-file=.env.secrets \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 
@@ -158,3 +161,94 @@ kubectl -n "$K8S_NAMESPACE" get svc eq-backend -w
 
 
 
+
+### 7) Triển khai lên GKE (Google Kubernetes Engine)
+
+Phần này tóm tắt toàn bộ quy trình tự tay triển khai Backend lên GKE Autopilot từ con số 0 đến chạy được, và cách “tắt/giảm phí” khi không dùng.
+
+1) Chuẩn bị tài khoản và công cụ
+- Tạo tài khoản Google Cloud và kích hoạt Free Trial (thường được $300).
+- Cài gcloud SDK và kubectl trên máy local.
+- Tạo Project (trong dự án này thì là `emostagram`). Lấy `PROJECT_ID`.
+
+2) Đăng nhập và chọn project
+```bash
+gcloud auth login
+gcloud config set project <PROJECT_ID>
+```
+
+3) Bật các API cần thiết
+```bash
+gcloud services enable container.googleapis.com iamcredentials.googleapis.com sts.googleapis.com
+```
+
+4) Tạo Autopilot cluster (hoặc tạo bằng UI trên google console)
+```bash
+gcloud container clusters create-auto autopilot-cluster-1 \
+  --region australia-southeast1 \
+  --project <PROJECT_ID>
+```
+
+5) Kết nối kubectl tới cluster
+```bash
+gcloud container clusters get-credentials autopilot-cluster-1 \
+  --region australia-southeast1 --project <PROJECT_ID>
+kubectl get ns
+```
+
+6) Chuẩn bị manifests của dự án (đã có sẵn trong `eq_test_backend/k8s/`)
+- `k8s/kustomization.yaml` gộp `configmap.yaml`, `job-migrate.yaml`, `deploy.yaml`, set `namespace: eq-backend` và `images.newTag`.
+- `k8s/deploy.yaml` đã để Service kiểu `LoadBalancer` cho GKE.
+
+7) Tạo namespace và Secret, dùng secret từ `.env`)
+```bash
+kubectl create ns eq-backend 2>/dev/null || true
+kubectl -n eq-backend apply -f eq_test_backend/k8s/configmap.yaml
+kubectl -n eq-backend create secret generic eq-backend-secrets \
+  --from-env-file=.env \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+8) Deploy (migrate trước rồi app)
+```bash
+kubectl apply -k eq_test_backend/k8s
+kubectl -n eq-backend wait --for=condition=complete job/eq-backend-migrate --timeout=300s || \
+kubectl -n eq-backend logs job/eq-backend-migrate --all-containers
+kubectl -n eq-backend rollout status deploy/eq-backend
+kubectl -n eq-backend get svc eq-backend -w    # lấy EXTERNAL-IP
+```
+
+9) Smoke test
+```bash
+curl http://<EXTERNAL-IP>/health
+curl http://<EXTERNAL-IP>/health/db
+curl http://<EXTERNAL-IP>/api/v1/topics/
+```
+
+10) Giảm phí/tắt khi không dùng
+- Nếu còn dùng lại sớm (khuyên dùng):
+```bash
+# Xóa Service LoadBalancer để ngừng phí LB
+kubectl -n eq-backend delete svc eq-backend
+# Dừng app (replicas=0)
+kubectl -n eq-backend scale deploy/eq-backend --replicas=0
+```
+- Nếu muốn 0 chi phí tuyệt đối: xóa cluster :v
+```bash
+gcloud container clusters delete autopilot-cluster-1 \
+  --region australia-southeast1 --project <PROJECT_ID> --quiet
+```
+
+11) Bật lại 
+```bash
+# Nếu chỉ scale=0 hoặc đã xóa Service:
+kubectl apply -k eq_test_backend/k8s
+kubectl -n eq-backend wait --for=condition=complete job/eq-backend-migrate --timeout=300s || \
+kubectl -n eq-backend logs job/eq-backend-migrate --all-containers
+kubectl -n eq-backend rollout status deploy/eq-backend
+kubectl -n eq-backend get svc eq-backend -w
+```
+
+Ghi chú:
+- Autopilot có thể mất vài phút để cấp node lần đầu; đặt `resources.requests/limits` hợp lý giúp scheduler dễ sắp chỗ.
+- Hãy đổi `images.newTag` trong `k8s/kustomization.yaml` sang tag build của CI (ví dụ `sha-<commit>`) để rollout/rollback chính xác.

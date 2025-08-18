@@ -10,7 +10,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: REPLACE_IMG
+          image: docker.io/khangpt/eq-test-backend
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef: { name: eq-backend-secrets }
@@ -24,10 +24,9 @@ kind: Service
 metadata:
   name: eq-backend
 spec:
-  type: NodePort
+  type: LoadBalancer
   selector: { app: eq-backend }
   ports:
     - name: http
       port: 80
       targetPort: 5001
-      nodePort: 30080

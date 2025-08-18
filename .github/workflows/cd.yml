@@ -100,7 +100,7 @@ jobs:
           set -euo pipefail
           NS="${{ steps.ns.outputs.namespace }}"
           kubectl -n "$NS" delete job eq-backend-migrate --ignore-not-found --wait=true
-          kubectl -n "$NS" apply -k eq_test_backend/k8s
+          kubectl -n "$NS" apply -k k8s/
           if ! kubectl -n "$NS" wait --for=condition=complete job/eq-backend-migrate --timeout=300s; then
             echo "Migration job failed or timed out. Fetching logs..." >&2
             kubectl -n "$NS" logs job/eq-backend-migrate --all-containers || true
@@ -112,7 +112,7 @@ jobs:
         run: |
           set -euo pipefail
           NS="${{ steps.ns.outputs.namespace }}"
-          kubectl -n "$NS" apply -k eq_test_backend/k8s
+          kubectl -n "$NS" apply -k k8s/
           kubectl -n "$NS" set image deploy/eq-backend app="${IMAGE}" --record
           kubectl -n "$NS" scale deploy/eq-backend --replicas=1
           kubectl -n "$NS" rollout status deploy/eq-backend
